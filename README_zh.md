@@ -189,3 +189,5 @@ CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件
 - **上游项目**：[cf-pages/Telegraph-Image](https://github.com/cf-pages/Telegraph-Image)
 
 CloudFlare ImgBed 由 Telegraph-Image 发展而来，感谢原项目作者及所有贡献者。
+
+<!-- sync-test-20260911 -->
