@@ -64,11 +64,6 @@ jobs:
           GH_TOKEN: ${{ secrets.SYNC_PAT }}
         run: bash .github/breaking-updates/scripts/breaking-update-guard.sh complete
 
-      - name: Trigger Worker deploy
-        if: steps.sync.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.SYNC_PAT }}
-        run: gh workflow run deploy-worker.yml --repo "${{ github.repository }}" --ref main
 
       - name: Sync failure guidance
         if: failure() && steps.sync.outcome == 'failure'
