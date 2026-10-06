@@ -1,0 +1,84 @@
+name: Upstream Sync (Custom)
+
+# 与上游同名工作流解耦：本文件使用 SYNC_PAT（含 workflow scope）推送，
+# 因此即使上游修改了 .github/workflows/ 下的文件也能正常同步。
+# 原 sync-upstream.yml 已被停用，保留文件以便随时回退。
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # every day
+  workflow_dispatch:
+    inputs:
+      confirm_breaking_update:
+        description: "I have reviewed any compatibility update notice and agree to apply it if present / 我已阅读可能存在的兼容性更新公告，并同意在有此类更新时应用"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: upstream-sync-custom-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync_latest_from_upstream:
+    name: Sync latest commits from upstream repo
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.fork }}
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Check breaking update policy
+        id: breaking_guard
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+          UPSTREAM_REPO: MarSeventh/CloudFlare-ImgBed
+          UPSTREAM_BRANCH: main
+          ALLOW_BREAKING_UPDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_breaking_update == true }}
+        run: bash .github/breaking-updates/scripts/breaking-update-guard.sh check
+
+      - name: Sync upstream changes
+        id: sync
+        if: steps.breaking_guard.outputs.blocked != 'true'
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
+        with:
+          upstream_sync_repo: MarSeventh/CloudFlare-ImgBed
+          upstream_sync_branch: main
+          target_sync_branch: main
+          target_repo_token: ${{ secrets.SYNC_PAT }}
+          test_mode: false
+
+      - name: Complete breaking update notices
+        if: steps.sync.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: bash .github/breaking-updates/scripts/breaking-update-guard.sh complete
+
+      - name: Trigger Worker deploy
+        if: steps.sync.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+        run: gh workflow run deploy-worker.yml --repo "${{ github.repository }}" --ref main
+
+      - name: Sync failure guidance
+        if: failure() && steps.sync.outcome == 'failure'
+        run: |
+          {
+            echo "## \u26a0\ufe0f 上游同步未完成 / Upstream synchronization did not complete"
+            echo
+            echo "请查看上方 Sync upstream changes 步骤的原始报错定位原因。"
+            echo
+            echo "Check the raw error output of the 'Sync upstream changes' step above."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "[Error] 上游同步未能完成，请查看日志。"
+          exit 1
