@@ -11,7 +11,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 0 * * *" # every day
+    - cron: "0 0 * * 0" # weekly, Sunday 00:00 UTC (北京时间 08:00)
   workflow_dispatch:
     inputs:
       confirm_breaking_update:
